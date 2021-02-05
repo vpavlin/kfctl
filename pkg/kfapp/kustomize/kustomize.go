@@ -109,6 +109,8 @@ type kustomize struct {
 	configOverwrite bool
 }
 
+var enableKustAlphaPlugin = "no"
+
 const (
 	defaultUserId = "anonymous"
 	outputDir     = "kustomize"
@@ -174,9 +176,17 @@ func (kustomize *kustomize) render(app kfconfig.Application) ([]byte, error) {
 	var data []byte
 	if setOperatorAnnotation {
 		// retrieve the UID of the KfDef resource using dynamic client
-		config, _ := rest.InClusterConfig()
+		config, err := rest.InClusterConfig()
+		if err != nil {
+			log.Errorf("Failed to load in cluster config: %v", err)
+			return nil, &kfapisv3.KfError{
+				Code:    int(kfapisv3.INTERNAL_ERROR),
+				Message: fmt.Sprintf("failed to load in cluster config: %v", err),
+			}
+		}
 		dyn, err := dynamic.NewForConfig(config)
 		if err != nil {
+			log.Errorf("Failed to create dynamic client: %v", err)
 			return nil, &kfapisv3.KfError{
 				Code:    int(kfapisv3.INTERNAL_ERROR),
 				Message: fmt.Sprintf("failed to create dynamic client: %v", err),
@@ -185,6 +195,7 @@ func (kustomize *kustomize) render(app kfconfig.Application) ([]byte, error) {
 		kfDefRes := schema.GroupVersionResource{Group: "kfdef.apps.kubeflow.org", Version: "v1", Resource: "kfdefs"}
 		instance, err := dyn.Resource(kfDefRes).Namespace(kustomize.kfDef.GetNamespace()).Get(kustomize.kfDef.GetName(), metav1.GetOptions{})
 		if err != nil {
+			log.Errorf("Failed to get the KfDef object: %v", err)
 			return nil, &kfapisv3.KfError{
 				Code:    int(kfapisv3.INTERNAL_ERROR),
 				Message: fmt.Sprintf("failed to get the KfDef object: %v", err),
@@ -192,14 +203,16 @@ func (kustomize *kustomize) render(app kfconfig.Application) ([]byte, error) {
 		}
 		data, err = GenerateYamlWithOperatorAnnotation(resMap, instance)
 		if err != nil {
+			log.Errorf("Failed to add operator annotations for %v: %v", app.Name, err)
 			return nil, &kfapisv3.KfError{
 				Code:    int(kfapisv3.INTERNAL_ERROR),
-				Message: fmt.Sprintf("can not encode component %v as yaml: %v", app.Name, err),
+				Message: fmt.Sprintf("failed to add operator annotations for %v: %v", app.Name, err),
 			}
 		}
 	} else {
 		data, err = resMap.AsYaml()
 		if err != nil {
+			log.Errorf("Failed to encode component %v as yaml: %v", app.Name, err)
 			return nil, &kfapisv3.KfError{
 				Code:    int(kfapisv3.INTERNAL_ERROR),
 				Message: fmt.Sprintf("can not encode component %v as yaml: %v", app.Name, err),
@@ -1296,7 +1309,14 @@ func EvaluateKustomizeManifest(compDir string) (resmap.ResMap, error) {
 	}
 	defer ldr.Cleanup()
 	rf := resmap.NewFactory(resource.NewFactory(kunstruct.NewKunstructuredFactoryImpl()), transformer.NewFactoryImpl())
-	pc := plugins.DefaultPluginConfig()
+	var pc *types.PluginConfig
+	if enableKustAlphaPlugin == "yes" {
+		log.Warn("Kustomize Alpha Plugins enabled")
+		pc = plugins.ActivePluginConfig()
+	} else {
+		log.Warn("Kustomize Alpha Plugins disabled")
+		pc = plugins.DefaultPluginConfig()
+	}
 	kt, err := target.NewKustTarget(ldr, rf, transformer.NewFactoryImpl(), plugins.NewLoader(pc, rf))
 	if err != nil {
 		return nil, err

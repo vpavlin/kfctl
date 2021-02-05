@@ -5,7 +5,7 @@ resources:
 - ./service_account.yaml
 - ./role.yaml
 - ./cluster_role_binding.yaml
-- ./operator.yaml
+- ./operator-vpavlin.yaml
 vars:
 - fieldref:
     fieldPath: metadata.namespace
@@ -17,4 +17,4 @@ vars:
 
 configurations:
 - ./params.yaml
-namespace: operators
+namespace: kubeflow-operator
