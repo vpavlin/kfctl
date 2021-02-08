@@ -5,6 +5,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strings"
+
 	"github.com/ghodss/yaml"
 	gogetter "github.com/hashicorp/go-getter"
 	"github.com/hashicorp/go-getter/helper/url"
@@ -13,18 +22,10 @@ import (
 	"github.com/otiai10/copy"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"io/ioutil"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"net/http"
-	"os"
-	"path"
-	"path/filepath"
-	"regexp"
 	"sigs.k8s.io/kustomize/v3/pkg/types"
-	"strings"
 )
 
 const (
@@ -77,6 +78,7 @@ type KfConfigSpec struct {
 	Plugins      []Plugin      `json:"plugins,omitempty"`
 	Secrets      []Secret      `json:"secrets,omitempty"`
 	Repos        []Repo        `json:"repos,omitempty"`
+	Global       Global        `json:"global,omitempty"`
 }
 
 // Application defines an application to install
@@ -148,6 +150,21 @@ type Repo struct {
 	// Can use any URI understood by go-getter:
 	// https://github.com/hashicorp/go-getter/blob/master/README.md#installation-and-usage
 	URI string `json:"uri,omitempty"`
+}
+
+type Global struct {
+	Transformers []Transformer `json:"transformers,omitempty"`
+	Generators   []Generator   `json:"generators,omitempty"`
+}
+
+type Transformer struct {
+	Name    string   `json:"name,omitempty"`
+	RepoRef *RepoRef `json:"repoRef,omitempty"`
+}
+
+type Generator struct {
+	Name    string   `json:"name,omitempty"`
+	RepoRef *RepoRef `json:"repoRef,omitempty"`
 }
 
 type Status struct {

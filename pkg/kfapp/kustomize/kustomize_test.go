@@ -1,15 +1,16 @@
 package kustomize
 
 import (
-	"github.com/ghodss/yaml"
-	"github.com/google/go-cmp/cmp"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
-	"sigs.k8s.io/kustomize/v3/pkg/types"
 	"strings"
 	"testing"
+
+	"github.com/ghodss/yaml"
+	"github.com/google/go-cmp/cmp"
+	"sigs.k8s.io/kustomize/v3/pkg/types"
 
 	"github.com/kubeflow/kfctl/v3/pkg/kfconfig"
 	"github.com/otiai10/copy"
@@ -189,7 +190,7 @@ func TestCreateStackAppKustomization(t *testing.T) {
 			}
 		}
 
-		kustomizationFile, err := createStackAppKustomization(testDir, c.BasePath)
+		kustomizationFile, err := createStackAppKustomization(testDir, c.BasePath, &kfconfig.KfConfig{})
 
 		if err != nil {
 			t.Fatalf("Failed to create kustomization.yaml for Kubeflow apps stack: %v", err)

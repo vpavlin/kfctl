@@ -95,6 +95,7 @@ const (
 	patchesStrategicMergeMap MapType = 10
 	patchesJson6902Map       MapType = 11
 	OverlayParamName                 = "overlay"
+	transformersDirName              = "globalTransformers"
 )
 
 type kustomize struct {
@@ -625,7 +626,7 @@ func (kustomize *kustomize) Generate(resources kftypesv3.ResourceEnum) error {
 
 				// Path to the stack inside the cache.
 				stacksCacheDir := filepath.Join("../..", appPath)
-				if _, err := createStackAppKustomization(stackAppDir, stacksCacheDir); err != nil {
+				if _, err := createStackAppKustomization(stackAppDir, stacksCacheDir, kustomize.kfDef); err != nil {
 					return errors.WithStack(fmt.Errorf("There was a problem building the kustomize app for the Kubeflow application stack; %v ", err))
 				}
 			} else {
@@ -670,7 +671,7 @@ func (kustomize *kustomize) Generate(resources kftypesv3.ResourceEnum) error {
 // Returns the path to the kusotmizationFile.
 //
 // If the kustomization.yaml already exists then the changes are merged in.
-func createStackAppKustomization(stackAppDir string, basePath string) (string, error) {
+func createStackAppKustomization(stackAppDir string, basePath string, kfDef *kfconfig.KfConfig) (string, error) {
 	kustomizationFile := filepath.Join(stackAppDir, kftypesv3.KustomizationFile)
 
 	if _, err := os.Stat(stackAppDir); err == nil {
@@ -716,6 +717,8 @@ func createStackAppKustomization(stackAppDir string, basePath string) (string, e
 			break
 		}
 	}
+
+	AddGlobalTransformers(kfDef, kustomization, stackAppDir)
 
 	if !hasBasePath {
 		kustomization.Resources = append(kustomization.Resources, basePath)
@@ -1287,13 +1290,65 @@ func GenerateKustomizationFile(kfDef *kfconfig.KfConfig, root string,
 			kustomization.PatchesStrategicMerge = nil
 		}
 	}
+	log.Warnf("Found some global transformers: %v\n", kfDef.Spec.Global.Transformers)
+	AddGlobalTransformers(kfDef, kustomization, compDir)
+
 	buf, bufErr := yaml.Marshal(kustomization)
 	if bufErr != nil {
 		return bufErr
 	}
+
 	kustomizationPath := filepath.Join(compDir, kftypesv3.KustomizationFile)
 	kustomizationPathErr := ioutil.WriteFile(kustomizationPath, buf, 0644)
 	return kustomizationPathErr
+}
+
+// AddGlobalTransformers adds globaly defined transformers to the kustomization
+func AddGlobalTransformers(kfDef *kfconfig.KfConfig, kustomization *types.Kustomization, compDir string) *kfapisv3.KfError {
+	transformersDir := filepath.Join(compDir, transformersDirName)
+	if len(kfDef.Spec.Global.Transformers) > 0 {
+		if err := os.MkdirAll(transformersDir, os.ModePerm); err != nil {
+			err := fmt.Errorf("could not create directory %v", transformersDir)
+			log.Errorf("%v", err)
+			return &kfapisv3.KfError{
+				Code:    int(kfapisv3.INTERNAL_ERROR),
+				Message: err.Error(),
+			}
+		}
+	}
+
+	for _, t := range kfDef.Spec.Global.Transformers {
+		repoCache, ok := kfDef.GetRepoCache(t.RepoRef.Name)
+		if !ok {
+			err := fmt.Errorf("could note get repo cache for repo %s", t.RepoRef.Name)
+			log.Errorf("%v", err)
+			return &kfapisv3.KfError{
+				Code:    int(kfapisv3.INTERNAL_ERROR),
+				Message: err.Error(),
+			}
+		}
+		transformetTargetFile := filepath.Join(transformersDir, filepath.Base(t.RepoRef.Path))
+		transformetTargetFileRelative := filepath.Join(transformersDirName, filepath.Base(t.RepoRef.Path))
+		if err := copy.Copy(filepath.Join(repoCache.LocalPath, t.RepoRef.Path), transformetTargetFile); err != nil {
+			return &kfapisv3.KfError{
+				Code:    int(kfapisv3.INTERNAL_ERROR),
+				Message: fmt.Sprintf("couldn't copy transformer %s to %s: %v", t.Name, transformetTargetFile, err),
+			}
+		}
+		add := true
+		for _, tx := range kustomization.Transformers {
+			if tx == transformetTargetFileRelative {
+				add = false
+				break
+			}
+		}
+
+		if add {
+			kustomization.Transformers = append(kustomization.Transformers, transformetTargetFileRelative)
+		}
+	}
+
+	return nil
 }
 
 // EvaluateKustomizeManifest evaluates the kustomize dir compDir, and returns the resources.

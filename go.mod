@@ -19,6 +19,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golangplus/testing v0.0.0-20180327235837-af21d9c3145e
 	github.com/google/go-cmp v0.4.0
+	github.com/google/martian v2.1.0+incompatible // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/hashicorp/go-getter v1.0.2
 	github.com/hashicorp/go-version v1.2.0

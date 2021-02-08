@@ -16,6 +16,9 @@ package v1
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/ghodss/yaml"
 	kfapis "github.com/kubeflow/kfctl/v3/pkg/apis"
 	log "github.com/sirupsen/logrus"
@@ -23,8 +26,6 @@ import (
 	valid "k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"os"
-	"strings"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -54,6 +55,7 @@ type KfDefSpec struct {
 	Plugins      []Plugin      `json:"plugins,omitempty"`
 	Secrets      []Secret      `json:"secrets,omitempty"`
 	Repos        []Repo        `json:"repos,omitempty"`
+	Global       Global        `json:"global,omitempty"`
 }
 
 // Application defines an application to install
@@ -121,6 +123,21 @@ type Repo struct {
 	// Can use any URI understood by go-getter:
 	// https://github.com/hashicorp/go-getter/blob/master/README.md#installation-and-usage
 	URI string `json:"uri,omitempty"`
+}
+
+type Global struct {
+	Transformers []Transformer `json:"transformers,omitempty"`
+	Generators   []Generator   `json:"generators,omitempty"`
+}
+
+type Transformer struct {
+	Name    string   `json:"name,omitempty"`
+	RepoRef *RepoRef `json:"repoRef,omitempty"`
+}
+
+type Generator struct {
+	Name    string   `json:"name,omitempty"`
+	RepoRef *RepoRef `json:"repoRef,omitempty"`
 }
 
 // KfDefStatus defines the observed state of KfDef
